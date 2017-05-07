@@ -2,13 +2,13 @@
 /**
  * Myslq Class by Eagle
  * History:2017-04-22
- * Version:0.2
+ * Version:0.5
  */
-class mysqlClass
-{
+class mysqlClass{
   //Mysql base variables
-  public $dbMassage;  // Show mysql query status
-
+  private $dbMassage = array();  // Show mysql query status
+  private $debug = FALES;
+  private $errorType;
   private $host;    // Mysql host
   private $uname;   // MySQL username
   private $passwd;  // MySQL password
@@ -17,9 +17,10 @@ class mysqlClass
   private $charset; // MySQL charset
 
   protected $databaseLink;
+  protected $sql;
 
   // Class construct
-  function __construct($uname,$passwd,$host='localhost',$dbname="",$port=3306,$charset='utf8'){
+  function __construct($uname,$passwd,$dbname = "",$host='localhost',$port=3306,$charset='utf8'){
     $this->host    = $host;
     $this->port    = $port;
     $this->uname   = $uname;
@@ -27,36 +28,30 @@ class mysqlClass
     $this->dbname  = $dbname;
     $this->charset = $charset;
 
-    $this->Connect();
+    $this->connect();
   }
 
   // Class destructor
-
   function __destruct(){
     $this->closeConnection();
   }
 
-
-  private function Connect(){
-    if ($this->dbname == '') {
-      $this->databaseLink = new mysqli($this->host,$this->uname, $this->passwd,$this->dbname,$this->port);
+  private function connect(){
+      $this->databaseLink = new mysqli($this->host,$this->uname,$this->passwd,$this->dbname,$this->port);
       $this->databaseLink->set_charset($this->charset);
-      $this->connectError();
-    } else{
-      $this->databaseLink = new mysqli($this->host, $this->uname,$this->passwd,$this->dbname,$this->port);
-      $this->databaseLink->set_charset($this->charset);
-      $this->connectError();
-    }
-  }
-
-  private function connectError(){
-    if ($this->databaseLink->connect_errno) {
-      $this->dbMassage = 'Could not connect to server: '.$this->databaseLink->connect_error;
-    }
+      if($this->databaseLink->connect_errno){
+        $this->dbMassage[] = 'Could not connect to server: '.$this->databaseLink->connect_error;
+      }
   }
 
   private function closeConnection(){
     $this->databaseLink->close();
+  }
+
+  private function errorMessage($errorType){
+    if ($this->databaseLink->errno) {
+        $this->dbMassage[] = $errorType.":".$this->databaseLink->error;
+      }
   }
 
   // mysql_real_escape_string value
@@ -114,9 +109,10 @@ class mysqlClass
   }
 
   public function select($cols){
-      $cols = $this->escapeValue($cols);
-      $this->sql .= "SELECT ".$cols;
-      return $this;
+    $cols = $this->escapeValue($cols);
+    $this->sql .= "SELECT ".$cols;
+    $this->errorType = "Select problem";
+    return $this;
   }
 
   public function insert($tableName,$tableClos,$tableVal){
@@ -126,6 +122,7 @@ class mysqlClass
       $tableClos = $this->arrayVale($tableClos);
       $tableVal  = $this->arrayDotVale($tableVal);
       $this->sql .= "INSERT INTO ".$tableName." (".$tableClos.") VALUES (".$tableVal.")";
+      $this->errorType = "Insert problem";
       return $this;
   }
 
@@ -135,12 +132,14 @@ class mysqlClass
       $tableVal  = $this->escapeValue($tableVal);
       $tableVals = $this->arrayEqualVale($tableClos,$tableVal);
       $this->sql .= "UPDATE ".$tableName." SET ".$tableVals;
+      $this->errorType = "Update problem";
       return $this;
   }
   public function delete($tableName)
   {
     $tableName = $this->escapeValue($tableName);
     $this->sql .= "DELETE FROM ".$tableName;
+    $this->errorType = "Delete problem";
     return $this;
   }
 
@@ -151,15 +150,13 @@ class mysqlClass
   }
 
 
-  public function where($whereVal)
-  {
+  public function where($whereVal){
     $whereVal = $this->escapeValue($whereVal);
     $this->sql .= " WHERE ".$whereVal;
     return $this;
   }
 
-  public function limit($limitVal)
-  {
+  public function limit($limitVal){
     $limitVal = $this->escapeValue($limitVal);
     $this->sql .= " LIMIT ".$limitVal;
     return $this;
@@ -203,30 +200,35 @@ class mysqlClass
   public function min($cols){
       $cols = $this->escapeValue($cols);
       $this->sql .= "SELECT MIN(".$cols.")";
+      $this->errorType = "Select problem";
       return $this;
   }
 
   public function max($cols){
       $cols = $this->escapeValue($cols);
       $this->sql .= "SELECT MAX(".$cols.")";
+      $this->errorType = "Select problem";
       return $this;
   }
 
   public function count($cols){
       $cols = $this->escapeValue($cols);
       $this->sql .= "SELECT COUNT(".$cols.")";
+      $this->errorType = "Select problem";
       return $this;
   }
 
   public function avg($cols){
       $cols = $this->escapeValue($cols);
       $this->sql .= "SELECT AVG(".$cols.")";
+      $this->errorType = "Select problem";
       return $this;
   }
 
   public function sum($cols){
       $cols = $this->escapeValue($cols);
       $this->sql .= "SELECT SUM(".$cols.")";
+      $this->errorType = "Select problem";
       return $this;
   }
 
@@ -263,12 +265,14 @@ class mysqlClass
   public function createDatabase($dataBaseName){
     $dataBaseName = $this->escapeValue($dataBaseName);
     $this->sql .= "CREATE DATABASE ".$dataBaseName;
+    $this->errorType = "Can't Create Database";
     return $this;
   }
 
   public function dropDatabase($dataBaseName){
     $dataBaseName = $this->escapeValue($dataBaseName);
     $this->sql .= "DROP DATABASE ".$dataBaseName;
+    $this->errorType = "Can't Drop Database";
     return $this;
   }
 
@@ -276,18 +280,21 @@ class mysqlClass
     $tableVal = $this->escapeValue($tableName);
     $cols = $this->escapeValue($clos);
     $this->sql .= "CREATE TABLE ".$dataBaseName."(".$clos.") ENGINE = ".$engine;
+    $this->errorType = "Can't Create Table";
     return $this;
   }
 
   public function dropTable($tableName){
     $tableName = $this->escapeValue($tableName);
     $this->sql .= "DROP TABLE ".$tableName;
+    $this->errorType = "Can't Drop Table";
     return $this;
   }
 
   public function alterTable($tableName){
     $tableName = $this->escapeValue($tableName);
     $this->sql .= "ALTER TABLE ".$tableName;
+    $this->errorType = "Can't ALTER Table";
     return $this;
   }
 
@@ -309,44 +316,40 @@ class mysqlClass
     return $this;
   }
 
-  public function begin()
-  {
+  public function begin(){
     $this->sql = "BEGIN";
     return $this;
   }
 
-  public function rollBack()
-  {
+  public function rollBack(){
 
     $this->sql = "ROLLBACK";
     return $this;
   }
 
-  public function commit()
-  {
+  public function commit(){
 
     $this->sql = "COMMIT";
     return $this;
   }
 
-  public function selectDB($databaseName){
-    $databaseName = $this->escapeValue($databaseName);
-    if(!$this->databaseLink->select_db($databaseName)){
-      $this->dbMassage = 'Cannot select database: ' .$this->databaseLink->error;
+  public function getResult(){
+      if($result = $this->databaseLink->query($this->sql)){
+         while ($arr = $result->fetch_array()) {
+           $arrs[] = $arr;
+         }
+         return $arrs;
+         $result->free();
+      }else {
+         $this->errorMessage($this->errorType);
+      }
+  }
+
+  public function getErrMsg(){
+    if($this->debug == "TRUE"){
+      return $this->dbMassage;
     }
   }
-
-  public function getResult()
-  {
-      echo $this->sql.'<br/>';
-      if($result = $this->databaseLink->query($this->sql)){
-         return $result;
-         $result->free();
-         $this->dbMassage = "Successfully";
-      }else {
-         $this->dbMassage = $this->databaseLink->error;
-      }
-
-  }
 }
+
 ?>
